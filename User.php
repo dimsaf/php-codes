@@ -59,6 +59,7 @@ class User extends Entity {
 		// getting data
 		try {
 			$ldap = new Ldap();
+			// \Closure
 			$result = $ldap->process(function () use ($ldap, $searchString, $filters) {
 				return $ldap->getLdapData('', $searchString, $filters);
 			});
@@ -75,6 +76,7 @@ class User extends Entity {
 
 		try {
 			$ldap = new Ldap();
+			// \Closure
 			$result = $ldap->process(function () use ($ldap) {
 				$dn = $ldap->getDnByLogin($this->inputData['login']);
 				if (empty($dn)) throw new \RuntimeException("User " . $this->inputData['login'] . " not found", 404);
@@ -127,6 +129,7 @@ class User extends Entity {
 		$this->inputData['fields']['UserAccountControl'] = 32;        // требовать смену пароля при следующем входе
 
 		try {
+			// \Closure
 			$result = $ldap->process(function () use ($ldap, $dn) {
 				return $ldap->addUser($dn, $this->inputData['fields']);
 			});
@@ -145,6 +148,7 @@ class User extends Entity {
 
 		try {
 			$ldap = new Ldap();
+			// \Closure
 			$result = $ldap->process(function () use ($ldap, $searchString, $type) {
 				$data = $ldap->getLdapData('', $searchString, ["dn", "useraccountcontrol"]);
 				if (empty($data)) throw new \RuntimeException("User " . $this->inputData['login'] . " not found", 404);
