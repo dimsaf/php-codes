@@ -1,5 +1,7 @@
 <?php
 /**
+ * LDAP AUTH API: User class
+ * 
  * @author: Dimas
  * @mail: dimsaf@mail.ru
  * Date: 19.05.2020
@@ -24,22 +26,17 @@ class User extends Entity {
 	 * @return array|bool
 	 */
 	public function _auth() {
-		try {
-			// checking to the crypted pass
-			if (strlen($this->inputData['pass']) > 10) $this->inputData['pass'] = Signature::decrypting($this->inputData['pass']);
-			// authentification
-			$ldap = new Ldap();
-			$ldap->auth($this->inputData['login'], $this->inputData['pass']);
+		// checking to the crypted pass
+		if (strlen($this->inputData['pass']) > 10) $this->inputData['pass'] = Signature::decrypting($this->inputData['pass']);
+		// authentification
+		$ldap = new Ldap();
+		$ldap->auth($this->inputData['login'], $this->inputData['pass']);
 
-			// token generation if OU= special org only!
-			$dn = $ldap->getDnByLogin($this->inputData['login'], true);
-			if (empty($dn) || !is_array($dn)) return false;
-			if (!preg_match("/" . self::AUTH_ORG . "/", $dn[0])) return false;
-			$token = Signature::encrypting(time() . "=" . $_SERVER['REMOTE_ADDR']);
-
-		} catch (\RuntimeException $e) {
-			throw new \RuntimeException($e->getMessage(), $e->getCode());
-		}
+		// token generation if OU= special org only!
+		$dn = $ldap->getDnByLogin($this->inputData['login'], true);
+		if (empty($dn) || !is_array($dn)) return false;
+		if (!preg_match("/" . self::AUTH_ORG . "/", $dn[0])) return false;
+		$token = Signature::encrypting(time() . "=" . $_SERVER['REMOTE_ADDR']);
 
 		return ['token' => $token];
 	}
@@ -57,15 +54,11 @@ class User extends Entity {
 		$filters = isset($this->inputData['filters']) && !empty($this->inputData['filters']) ? $this->inputData['filters'] : ["*"];
 
 		// getting data
-		try {
-			$ldap = new Ldap();
-			// \Closure
-			$result = $ldap->process(function () use ($ldap, $searchString, $filters) {
-				return $ldap->getLdapData('', $searchString, $filters);
-			});
-		} catch (\RuntimeException $e) {
-			throw new \RuntimeException($e->getMessage(), $e->getCode());
-		}
+		$ldap = new Ldap();
+		// \Closure
+		$result = $ldap->process(function () use ($ldap, $searchString, $filters) {
+			return $ldap->getLdapData('', $searchString, $filters);
+		});
 
 		return $result;
 	}
@@ -74,21 +67,15 @@ class User extends Entity {
 		// prepare required fields
 		$this->inputData['fields'] = $this->doReplacements($this->inputData['fields']);
 
-		try {
-			$ldap = new Ldap();
-			// \Closure
-			$result = $ldap->process(function () use ($ldap) {
-				$dn = $ldap->getDnByLogin($this->inputData['login']);
-				if (empty($dn)) throw new \RuntimeException("User " . $this->inputData['login'] . " not found", 404);
+		$ldap = new Ldap();
+		// \Closure
+		$result = $ldap->process(function () use ($ldap) {
+			$dn = $ldap->getDnByLogin($this->inputData['login']);
+			if (empty($dn)) throw new \RuntimeException("User " . $this->inputData['login'] . " not found", 404);
+			return $ldap->updateUser($dn[0], $this->inputData['fields']);
+		});
 
-				return $ldap->updateUser($dn[0], $this->inputData['fields']);
-			});
-
-			return $result;
-
-		} catch (\RuntimeException $e) {
-			throw new \RuntimeException($e->getMessage(), $e->getCode());
-		}
+		return $result;
 	}
 
 	public function _create() {
@@ -128,14 +115,11 @@ class User extends Entity {
 		$this->inputData['fields']['objectclass'] = ['top', 'person', 'organizationalPerson', 'user'];
 		$this->inputData['fields']['UserAccountControl'] = 32;        // требовать смену пароля при следующем входе
 
-		try {
-			// \Closure
-			$result = $ldap->process(function () use ($ldap, $dn) {
-				return $ldap->addUser($dn, $this->inputData['fields']);
-			});
-		} catch (\RuntimeException $e) {
-			throw new \RuntimeException($e->getMessage(), $e->getCode());
-		}
+		// \Closure
+		$result = $ldap->process(function () use ($ldap, $dn) {
+			return $ldap->addUser($dn, $this->inputData['fields']);
+		});
+
 		if ($result == 1) $result = $this->inputData['fields']['samaccountname'];
 
 		return $result;
@@ -146,26 +130,21 @@ class User extends Entity {
 		$searchString = str_replace("[[+value]]", $this->inputData["login"], $this->getParams["login"][1]);
 		$type = (isset($this->inputData["type"]) && $this->inputData["type"] == "unblock") ? -2 : 2;
 
-		try {
-			$ldap = new Ldap();
-			// \Closure
-			$result = $ldap->process(function () use ($ldap, $searchString, $type) {
-				$data = $ldap->getLdapData('', $searchString, ["dn", "useraccountcontrol"]);
-				if (empty($data)) throw new \RuntimeException("User " . $this->inputData['login'] . " not found", 404);
+		$ldap = new Ldap();
+		// \Closure
+		$result = $ldap->process(function () use ($ldap, $searchString, $type) {
+			$data = $ldap->getLdapData('', $searchString, ["dn", "useraccountcontrol"]);
+			if (empty($data)) throw new \RuntimeException("User " . $this->inputData['login'] . " not found", 404);
 
-				$flag = $data[0]['useraccountcontrol'][0];
-				$check = $ldap->checkUserDisabled($flag);
-				if ($check == 'disabled' && $type == 2) throw new \RuntimeException("User is alredy blocked", 423);
-				if ($check == 'enabled' && $type == -2) throw new \RuntimeException("User is alredy unblocked", 423);
+			$flag = $data[0]['useraccountcontrol'][0];
+			$check = $ldap->checkUserDisabled($flag);
+			if ($check == 'disabled' && $type == 2) throw new \RuntimeException("User is alredy blocked", 423);
+			if ($check == 'enabled' && $type == -2) throw new \RuntimeException("User is alredy unblocked", 423);
 
-				return $ldap->updateUser($data[0]['dn'], ['userAccountControl' => $flag + $type]);
+			return $ldap->updateUser($data[0]['dn'], ['userAccountControl' => $flag + $type]);
+		});
 
-			});
+		return $result;
 
-			return $result;
-
-		} catch (\RuntimeException $e) {
-			throw new \RuntimeException($e->getMessage(), $e->getCode());
-		}
 	}
 }
